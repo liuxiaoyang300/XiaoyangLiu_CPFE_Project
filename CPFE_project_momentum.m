@@ -76,7 +76,7 @@ merged_data = sortrows(merged_data,'code','ascend');
 
 % Part-2
 
-% 程子珊 2000015458
+% 程子珊 2000015458 & 肖珺文 2000015401
 % CPFE_project_momentum
 
 % (b) Every K months, sort stocks into five groups based on previous K 
@@ -91,6 +91,9 @@ K = [1 3 6 12 24];
 % 按公司名称分组计算K月收益率
 [G,company] = findgroups(merged_data.code);
 [row_num col_num] = size(merged_data);
+
+% 设置按K与时间存储spread的数组
+all_spreads = [];
 
 % 对每个时间间隔K月进行分组、持有和计算平均收益率
 % 计算结果存在table里最后一起输出
@@ -142,7 +145,93 @@ for i = 1:length(K)
 
     % 得到了每个日期下，从低到高5个分组内的等权重收益率
     us_av_table = unstack(avvr_table, 'avreturn', 'rtport');
+        % 合并到spread总表
+    all_spreads = [all_spreads; table(repmat(K(i), size(k_spreads, 1), 1), k_spreads, 'VariableNames', {'K', 'Spread'})];
 end
+
+% 分析动量效应：
+
+% 统计检验：如果spread显著大于0，表明存在正向动量效应
+for i = 1:length(K)
+    % 选取当前K值下的spread数据
+    current_spreads = all_spreads.Spread(all_spreads.K == K(i));
+    
+    % 进行t-test
+    [h,p,ci,stats] = ttest(current_spreads);
+    fprintf('K = %d: t-stat = %.2f, p-value = %.3f\n', K(i), stats.tstat, p);
+end
+
+% Result支持正向动量效应的存在
+% K = 1: t-stat = 34.06, p-value = 0.000
+% K = 3: t-stat = 40.68, p-value = 0.000
+% K = 6: t-stat = 49.29, p-value = 0.000
+% K = 12: t-stat = 55.00, p-value = 0.000
+% K = 24: t-stat = 72.75, p-value = 0.000
+
+%%
+
+% Part-3
+
+% 肖珺文 2000015401
+% CPFE_project_momentum
+
+% (c) Use the principal component analysis for the equal-weighted return 
+% of five portfolios created by sorting on previous K = 3 months' return. 
+% How do you interpret the first and second factor from the PCA in 
+% economic terms? You may explore whether these factors are useful to 
+% explain portfolios sorted by previous stock returns. Also compare PCA 
+% factors to the factor MOM defined as the difference in equal-weighted 
+% return between the high previous stock returns portfolio and low previous
+% stock returns portfolio.
+
+% 提取K = 3的return
+K_3_returns = all_spreads(all_spreads.K == 3, :);
+
+% 转置
+data_for_PCA = table2array(us_av_table(:, 2:end)); 
+
+% 执行PCA
+[coeff, score, latent, tsquared, explained] = pca(data_for_PCA);
+
+first_two_factors = data_for_PCA * coeff(:,1:2);
+
+% 初始化存储回归结果的变量
+num_portfolios = size(data_for_PCA, 2); 
+residSD = zeros(num_portfolios, 1);
+gamma1 = zeros(num_portfolios, 1);
+gamma2 = zeros(num_portfolios, 1);
+constant = ones(length(first_two_factors), 1);
+
+% 对每个投资组合进行回归分析
+for i = 1:num_portfolios
+    [b, bint, r, rint, stats] = ...
+        regress(data_for_PCA(:, i), [constant, first_two_factors]);
+
+    residSD(i) = sqrt(stats(4));
+    gamma1(i) = b(2);
+    gamma2(i) = b(3);
+end
+
+% 绘制回归系数
+plot([gamma1, gamma2], '-x');
+legend('First Principal Component', 'Second Principal Component');
+xlabel('Portfolio Index');
+ylabel('Coefficient');
+title('Regression Coefficients on Principal Components');
+
+% 显示前两个主成分解释的方差
+fprintf('Variance explained by the first principal component: %.2f%%\n', explained(1));
+fprintf('Variance explained by the second principal component: %.2f%%\n', explained(2));
+
+% Interpretation：前二大PC的Variance Explained分别为：99.52%, 0.42%.
+% First PC (blue)：通常可以解读为市场趋势，影响所有投资组合的整体收益；
+% Second PC (orange)：作为斜率项，捕捉了与动量策略更直接相关的市场行为特征，比如投资者追涨杀跌等基于股价历史表现的交易行为特点。
+
+% 对5个投资组合收益回归：
+% First PC (blue)：因子载荷走势平缓，说明市场平均收益水平变动对基于动量划分的投资组合的影响相对均匀
+% Second PC (orange)：因子载荷单调上升，说明该主成分对收益的影响与投资组合动量正相关...
+% 且随动量上升，单位影响由负转正，也在一定程度上反映中国股市的动量反转特点...
+% 即认为低动量股票未来可能提升表现，而高动量股票的表现则可能下降
 
 
 
