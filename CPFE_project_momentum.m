@@ -145,7 +145,25 @@ for i = 1:length(K)
 
     % 得到了每个日期下，从低到高5个分组内的等权重收益率
     us_av_table = unstack(avvr_table, 'avreturn', 'rtport');
-        % 合并到spread总表
+    % 计算高收益组和低收益组之间的平均等权重收益率差异
+    low_return = us_av_table{:, 'x1'};
+    high_return = us_av_table{:, 'x5'};
+    spread = mean(high_return - low_return, 'omitnan');
+
+    % 初始化当前K值下所有日期的spread数组
+    k_spreads = [];
+
+    % 对于每个日期计算spread，并存储
+    for j = 1:size(us_av_table, 1)
+        low_return = us_av_table{j, 'x1'};
+        high_return = us_av_table{j, 'x5'};
+        spread = high_return - low_return;
+        
+        % 添加spread到当前K值的spread数组中
+        k_spreads = [k_spreads; spread];
+    end
+    
+    % 合并到spread总表
     all_spreads = [all_spreads; table(repmat(K(i), size(k_spreads, 1), 1), k_spreads, 'VariableNames', {'K', 'Spread'})];
 end
 
